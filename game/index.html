@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Twin Frames — Spot the Difference</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #20242e; font-family: Georgia, 'Times New Roman', serif; color: #f5f0dc; }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  #hud { display: flex; align-items: center; gap: 18px; padding: 10px 20px; background: #171a21; border-bottom: 2px solid #f5f0dc33; font-size: 17px; }
+  #hud .brand { font-size: 22px; font-weight: bold; letter-spacing: 1px; color: #ffd94d; }
+  #hud .stat { white-space: nowrap; }
+  #hud #timer { font-size: 24px; font-weight: bold; }
+  #hud #timer.low { color: #ff6b5e; }
+  #hud #combo { color: #ffd94d; font-weight: bold; }
+  #hud .spacer { flex: 1; }
+  #hud button { font-family: inherit; font-size: 15px; padding: 7px 14px; border-radius: 8px; border: 1px solid #f5f0dc66; background: #2b303d; color: #f5f0dc; cursor: pointer; }
+  #hud button:hover:not(:disabled) { background: #3a4052; }
+  #hud button:disabled { opacity: 0.45; cursor: default; }
+  #stage { position: relative; flex: 1; }
+  #game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); background: #171a21ee; border: 1px solid #ffd94d; color: #ffd94d; padding: 8px 18px; border-radius: 20px; font-size: 16px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: rgba(16, 18, 26, 0.82); padding: 20px; }
+  .screen.hidden { display: none; }
+  .screen h1 { font-size: 46px; margin: 0 0 8px; color: #ffd94d; }
+  .screen h2 { font-size: 34px; margin: 0 0 8px; color: #ffd94d; }
+  .screen p { font-size: 18px; max-width: 560px; line-height: 1.5; margin: 6px 0; }
+  .screen .detail { color: #c9c2a8; }
+  .screen button { font-family: inherit; font-size: 19px; padding: 12px 30px; margin: 10px 6px 0; border-radius: 10px; border: none; background: #ffd94d; color: #20242e; font-weight: bold; cursor: pointer; }
+  .screen button.secondary { background: transparent; border: 1px solid #f5f0dc66; color: #f5f0dc; }
+  .screen button:hover { filter: brightness(1.08); }
+  .levels { display: flex; gap: 14px; margin: 14px 0 4px; }
+  .level-card { border: 1px solid #f5f0dc55; border-radius: 10px; padding: 12px 16px; font-size: 15px; line-height: 1.5; }
+  .level-card b { color: #ffd94d; }
+  #howto { font-size: 16px; color: #c9c2a8; max-width: 560px; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <span class="brand">TWIN FRAMES</span>
+    <span class="stat" id="level-name">Three scenes to study</span>
+    <span class="stat" id="counter">Found 0 of 7</span>
+    <span class="stat" id="timer">2:00</span>
+    <span class="stat" id="score">Score 0</span>
+    <span class="stat" id="combo"></span>
+    <span class="spacer"></span>
+    <button id="hint-btn">Hint (3)</button>
+    <button id="pause-btn">Pause</button>
+    <button id="mute-btn">Sound: on</button>
+  </div>
+  <div id="stage">
+    <canvas id="game" width="1280" height="720" aria-label="Twin Frames: two near-identical pictures side by side. Click the differences."></canvas>
+    <div id="toast" role="status"></div>
+
+    <div class="screen" id="title-screen">
+      <h1>TWIN FRAMES</h1>
+      <p>Two pictures. Nearly identical. Find every difference before the clock runs out.</p>
+      <div class="levels">
+        <div class="level-card"><b>Level 1</b><br>Cozy Kitchen<br>7 differences · 2:00</div>
+        <div class="level-card"><b>Level 2</b><br>Night Garden<br>8 differences · 1:45</div>
+        <div class="level-card"><b>Level 3</b><br>Harbour at Dusk<br>10 differences · 1:30</div>
+      </div>
+      <p class="detail">Click a difference on either picture. A wrong click costs 3 seconds. Hints are limited — press H or the Hint button. Keys: H hint · P pause · M mute · 1/2/3 pick a level.</p>
+      <div>
+        <button id="start-btn">Start the hunt</button>
+        <button id="how-btn" class="secondary">How to play</button>
+      </div>
+      <p id="howto" class="hidden">Study both pictures side by side. Something is missing, moved or recoloured in the right one — a cat, a clock hand, a colour. Click it on either picture and a gold ring marks it. Chain finds without a miss to build your combo up to x5. Finish a level to bank a time bonus.</p>
+    </div>
+
+    <div class="screen hidden" id="complete-screen">
+      <h2 id="complete-title">Level complete!</h2>
+      <p class="detail" id="complete-detail"></p>
+      <button id="next-btn">Next level</button>
+    </div>
+
+    <div class="screen hidden" id="over-screen">
+      <h2>Time's up!</h2>
+      <p class="detail" id="over-detail"></p>
+      <button id="retry-btn">Try this level again</button>
+    </div>
+
+    <div class="screen hidden" id="win-screen">
+      <h2>You found them all!</h2>
+      <p class="detail" id="win-detail"></p>
+      <button id="again-btn">Play again</button>
+    </div>
+
+    <div class="screen hidden" id="pause-screen">
+      <h2>Paused</h2>
+      <p class="detail">The clock is stopped. Take a breath, then look again.</p>
+      <div>
+        <button id="resume-btn">Resume</button>
+        <button id="quit-btn" class="secondary">Back to title</button>
+      </div>
+    </div>
+  </div>
+</div>
+<p id="status" role="status" aria-live="polite"></p>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
